@@ -40,6 +40,8 @@ def main():
                         help="Per-device batch size")
     parser.add_argument("--grad-accum", type=int, default=8,
                         help="Gradient accumulation steps")
+    parser.add_argument("--save-steps", type=int, default=200,
+                        help="Save checkpoint every X steps (for spot instances)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print config and exit without training")
     args = parser.parse_args()
@@ -116,18 +118,10 @@ def main():
         """Convert messages list to Qwen2.5 chat template string."""
         texts = []
         for messages in examples["messages"]:
-            # Use tokenizer's chat template to format
-            try:
-                text = tokenizer.apply_chat_template(
-                    messages,
-                    tokenize=False,
-                    add_generation_prompt=False,
-                )
-                texts.append(text)
-            except Exception:
-                # Fallback: manual formatting for tool calls
-                text = _manual_format(messages)
-                texts.append(text)
+            # We strictly use the robust manual formatter because HF apply_chat_template
+            # often throws Jinja UndefinedError exceptions on custom tool call dictionaries.
+            text = _manual_format(messages)
+            texts.append(text)
         return {"text": texts}
 
     # ── Train ──
@@ -147,8 +141,9 @@ def main():
         weight_decay=0.01,
         bf16=True,
         logging_steps=10,
-        save_strategy="epoch",
-        save_total_limit=2,
+        save_strategy="steps",
+        save_steps=args.save_steps,
+        save_total_limit=3,
         eval_strategy="epoch" if eval_dataset else "no",
         optim="adamw_8bit",
         seed=42,
@@ -166,9 +161,18 @@ def main():
         args=training_args,
     )
 
-    print("\nStarting IFT training...")
-    stats = trainer.train()
-    print(f"\nTraining complete. Loss: {stats.training_loss:.4f}")
+    # Auto-resume from checkpoint if interrupted
+    import glob
+    checkpoints = glob.glob(os.path.join(args.output, "checkpoint-*"))
+    resume = len(checkpoints) > 0
+
+    print(f"\nStarting IFT training... (Resuming: {resume})")
+    try:
+        stats = trainer.train(resume_from_checkpoint=resume)
+        print(f"\nTraining complete. Loss: {stats.training_loss:.4f}")
+    except KeyboardInterrupt:
+        print("\nTraining interrupted. Model can be resumed later.")
+        return config
 
     # ── Save ──
     model.save_pretrained(args.output)
@@ -189,10 +193,13 @@ def main():
     return config
 
 
-def _manual_format(messages: list[dict]) -> str:
+def _manual_format(messages: list) -> str:
     """Fallback manual formatting for messages with tool calls."""
     parts = []
     for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+            
         role = msg.get("role", "")
         content = msg.get("content", "")
 

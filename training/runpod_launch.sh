@@ -16,11 +16,15 @@ echo "=============================================="
 echo "  STRUCTURAL DSL — TRAINING PIPELINE"
 echo "=============================================="
 
-cd /workspace/tryCAD_AI
+# Fix path to support direct repository clones (e.g. tryCAD)
+cd /workspace/tryCAD 2>/dev/null || cd /workspace/tryCAD_AI
+
 
 # ── 1. Install dependencies ──
 echo ""
 echo "[1/6] Installing dependencies..."
+# Upgrade torchvision first to satisfy unsloth strict dependencies
+pip install --upgrade "torchvision>=0.25.0" --no-cache-dir
 pip install -q "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
 pip install -q --no-deps xformers trl peft accelerate bitsandbytes
 pip install -q datasets lark autoawq
