@@ -22,4 +22,5 @@ vllm serve unsloth/Qwen2.5-72B-Instruct-bnb-4bit \
     --max-model-len 8192 \
     --host 0.0.0.0 \
     --port 8888 \
-    --enable-auto-tool-choice
+    --enable-auto-tool-choice \
+    --tool-call-parser hermes
