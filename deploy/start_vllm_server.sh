@@ -11,8 +11,8 @@ export HF_HOME="/workspace/huggingface_cache"
 echo "📦 Installing vLLM (this will use the workspace cache)..."
 pip install -q vllm
 
-echo "🟢 Launching vLLM Server on Port 8888..."
-# Launch on port 8888 so it is automatically exposed via RunPod's HTTP Proxy
+echo "🟢 Launching vLLM Server on Port 8080..."
+# Launch on port 8080 so it can be exposed alongside Jupyter
 vllm serve unsloth/Qwen2.5-72B-Instruct-bnb-4bit \
     --quantization bitsandbytes \
     --load-format bitsandbytes \
@@ -21,6 +21,6 @@ vllm serve unsloth/Qwen2.5-72B-Instruct-bnb-4bit \
     --max-lora-rank 64 \
     --max-model-len 8192 \
     --host 0.0.0.0 \
-    --port 8888 \
+    --port 8080 \
     --enable-auto-tool-choice \
     --tool-call-parser hermes
