@@ -304,7 +304,12 @@ def run_pipeline(output_dir: str = "data", total_examples: int = 500,
 
     with open(ift_path, "w", encoding="utf-8") as f:
         for example in all_examples:
-            f.write(json.dumps(example, ensure_ascii=False) + "\n")
+            # json.dumps can sometimes output multi-line if dict values contain raw newlines 
+            # and it tries to format them or if custom serialization kicks in.
+            # strict JSONL requires exactly one line per object, so replace any accidental \n 
+            row_str = json.dumps(example, ensure_ascii=False)
+            row_str = row_str.replace('\n', '\\n').replace('\r', '') 
+            f.write(row_str + "\n")
 
     # Write CPT corpus (just the DSL scripts)
     cpt_path = os.path.join(output_dir, "cpt_corpus.txt")

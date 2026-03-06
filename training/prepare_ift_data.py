@@ -45,8 +45,8 @@ def prepare_ift_data(
             if line:
                 examples.append(json.loads(line))
 
-    # Augment system messages with tool schema
-    tool_schema_str = json.dumps(TOOLS_SCHEMA, indent=2)
+    # Augment system messages with tool schema (strict no-indent for jsonl format)
+    tool_schema_str = json.dumps(TOOLS_SCHEMA)
     augmented = []
 
     for ex in examples:
@@ -76,12 +76,14 @@ def prepare_ift_data(
     # Write train
     with open(output_train, "w", encoding="utf-8") as f:
         for ex in train_data:
-            f.write(json.dumps(ex, ensure_ascii=False) + "\n")
+            row_str = json.dumps(ex, ensure_ascii=False).replace('\n', '\\n').replace('\r', '')
+            f.write(row_str + "\n")
 
     # Write eval
     with open(output_eval, "w", encoding="utf-8") as f:
         for ex in eval_data:
-            f.write(json.dumps(ex, ensure_ascii=False) + "\n")
+            row_str = json.dumps(ex, ensure_ascii=False).replace('\n', '\\n').replace('\r', '')
+            f.write(row_str + "\n")
 
     print(f"IFT data prepared:")
     print(f"  Train: {len(train_data)} examples → {output_train}")
