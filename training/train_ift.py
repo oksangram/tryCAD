@@ -122,7 +122,7 @@ def main():
             # often throws Jinja UndefinedError exceptions on custom tool call dictionaries.
             text = _manual_format(messages)
             texts.append(text)
-        return {"text": texts}
+        return texts
 
     # ── Train ──
     from trl import SFTTrainer
