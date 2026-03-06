@@ -28,6 +28,8 @@ def main():
                         help="HuggingFace repo to push AWQ model (optional)")
     parser.add_argument("--skip-merge", action="store_true",
                         help="Skip merge step (already have merged model)")
+    parser.add_argument("--skip-quantize", action="store_true",
+                        help="Skip AWQ quantization step (only merge to 16-bit)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print config and exit")
     args = parser.parse_args()
@@ -73,6 +75,10 @@ def main():
         print("\n[Step 1/2] Skipping merge (using existing merged model).")
 
     # ── Step 2: AWQ quantization ──
+    if args.skip_quantize:
+        print("\n[Step 2/2] Skipping quantization (--skip-quantize passed). Done!")
+        return
+
     print("\n[Step 2/2] Quantizing to AWQ 4-bit...")
 
     try:
