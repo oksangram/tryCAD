@@ -1,0 +1,111 @@
+// STAAD Pro DSL Grammar — Lark EBNF format
+// Handles: joints, members, sections, loads, supports, analysis.
+// Tolerates blank lines and in-line comments (* ...)
+
+start: _NL* header_section _NL* body_sections _NL* "FINISH" _NL*
+
+// ──────────────────────────────────────
+// Header
+// ──────────────────────────────────────
+header_section: staad_line (_NL+ input_width_line)? (_NL+ unit_line)?
+
+staad_line: "STAAD" STRUCTURE_TYPE
+input_width_line: "INPUT" "WIDTH" INT
+unit_line: "UNIT" LENGTH_UNIT FORCE_UNIT
+
+STRUCTURE_TYPE: "SPACE" | "PLANE" | "TRUSS" | "FLOOR"
+LENGTH_UNIT: "METER" | "MM" | "CM" | "FT" | "INCH"
+FORCE_UNIT: "KN" | "MN" | "KG" | "NEWTON" | "KIP" | "POUND"
+
+// ──────────────────────────────────────
+// Body sections (order-flexible)
+// ──────────────────────────────────────
+body_sections: (_NL* body_section)*
+body_section: joint_section
+            | member_section
+            | property_section
+            | support_section
+            | loading_section
+            | load_combination_section
+            | analysis_section
+
+// ──────────────────────────────────────
+// Joint Coordinates
+// ──────────────────────────────────────
+joint_section: "JOINT" "COORDINATES" (_NL+ joint_line)+
+
+joint_line: INT SIGNED_NUMBER SIGNED_NUMBER SIGNED_NUMBER ";"?
+
+// ──────────────────────────────────────
+// Member Incidences
+// ──────────────────────────────────────
+member_section: "MEMBER" "INCIDENCES" (_NL+ member_line)+
+
+member_line: INT INT INT ";"?
+
+// ──────────────────────────────────────
+// Member Properties (Section Assignments)
+// ──────────────────────────────────────
+property_section: "MEMBER" "PROPERTY" (_NL+ property_line)+
+
+property_line: int_list "TABLE" SPEC_TYPE SECTION_NAME
+
+int_list: INT+
+SPEC_TYPE: "ST" | "LD" | "SD" | "RA"
+SECTION_NAME: /[A-Z][A-Z0-9\/X]+/
+
+// ──────────────────────────────────────
+// Supports
+// ──────────────────────────────────────
+support_section: "SUPPORT" (_NL+ support_line)+
+
+support_line: int_list SUPPORT_TYPE release_clause?
+
+SUPPORT_TYPE: "FIXED" | "PINNED"
+release_clause: "BUT" released_dof+
+released_dof: /[FM][XYZ]/
+
+// ──────────────────────────────────────
+// Loading
+// ──────────────────────────────────────
+loading_section: "LOADING" INT load_title? (_NL+ load_content)+
+
+load_title: /[^\n]+/
+load_content: selfweight_line | member_load_block | joint_load_block
+
+selfweight_line: "SELFWEIGHT" LOAD_DIRECTION SIGNED_NUMBER
+
+member_load_block: "MEMBER" "LOAD" (_NL+ member_load_line)+
+member_load_line: int_list LOAD_TYPE LOAD_DIRECTION SIGNED_NUMBER con_distance?
+
+joint_load_block: "JOINT" "LOAD" (_NL+ joint_load_line)+
+joint_load_line: INT "FX" SIGNED_NUMBER "FY" SIGNED_NUMBER "FZ" SIGNED_NUMBER ("MX" SIGNED_NUMBER "MY" SIGNED_NUMBER "MZ" SIGNED_NUMBER)?
+
+LOAD_TYPE: "UNI" | "CON" | "LIN" | "TRAP"
+LOAD_DIRECTION: "GX" | "GY" | "GZ" | "X" | "Y" | "Z"
+con_distance: SIGNED_NUMBER
+
+// ──────────────────────────────────────
+// Load Combinations
+// ──────────────────────────────────────
+load_combination_section: "LOAD" "COMBINATION" INT combo_title? (_NL+ combo_factor_line)+
+
+combo_title: /[^\n]+/
+combo_factor_line: INT SIGNED_NUMBER
+
+// ──────────────────────────────────────
+// Analysis
+// ──────────────────────────────────────
+analysis_section: "PERFORM" "ANALYSIS"
+
+// ──────────────────────────────────────
+// Terminals & Ignores
+// ──────────────────────────────────────
+%import common.INT
+%import common.SIGNED_NUMBER
+%import common.NEWLINE
+%import common.WS_INLINE
+
+_NL: NEWLINE
+%ignore WS_INLINE
+%ignore /\*[^\n]*/
