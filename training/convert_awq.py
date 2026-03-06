@@ -55,10 +55,10 @@ def main():
             model_name=args.adapter,
             max_seq_length=8192,
             dtype=None,
-            load_in_4bit=False,  # Load in full precision for merging
+            load_in_4bit=True,  # Keep 4-bit to fit in RAM/GPU during merge logic
         )
 
-        # Save merged model in 16-bit
+        # Save merged model in 16-bit iteratively saving chunks directly to disk
         os.makedirs(args.output_merged, exist_ok=True)
         model.save_pretrained_merged(
             args.output_merged,
