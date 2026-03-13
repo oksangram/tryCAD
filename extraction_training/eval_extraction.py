@@ -100,16 +100,22 @@ def main():
             return_tensors="pt",
         ).to(model.device)
 
-        # Generate
+        # Generate with streaming
+        print(f"\n🤖 MODEL OUTPUT (streaming):")
+        from transformers import TextStreamer
+        streamer = TextStreamer(tokenizer, skip_prompt=True,
+                               skip_special_tokens=True)
+
         with torch.no_grad():
             output_ids = model.generate(
                 **inputs,
                 max_new_tokens=args.max_tokens,
                 temperature=0.1,
                 do_sample=False,
+                streamer=streamer,
             )
 
-        # Decode only new tokens
+        # Decode full output for comparison
         generated_ids = output_ids[:, inputs["input_ids"].shape[1]:]
         output_text = tokenizer.batch_decode(
             generated_ids, skip_special_tokens=True
@@ -128,9 +134,6 @@ def main():
 
         print(f"\n📋 EXPECTED (first 300 chars):")
         print(expected[:300])
-
-        print(f"\n🤖 MODEL OUTPUT (first 300 chars):")
-        print(output_text[:300])
 
         # Try to parse and compare key fields
         try:
