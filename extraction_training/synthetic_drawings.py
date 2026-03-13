@@ -29,6 +29,7 @@ from extraction_training.drawing_utils import (
     draw_member_line, draw_brace_x, draw_brace_v, draw_brace_single,
     place_label, label_above, label_below, label_side, label_inline,
     dim_horizontal, dim_vertical, dim_span_summary,
+    draw_grid_labels_bottom, draw_grid_labels_left,
     LABEL_COLOR,
 )
 
@@ -715,8 +716,591 @@ def generate_composite_frame(idx: int) -> tuple[dict, callable]:
     return ground_truth, render
 
 
+def generate_composite_multistory(idx: int) -> tuple[dict, callable]:
+    """Multi-story frame: 2-3 floors with elevation + plan."""
+    n_bays = random.randint(2, 4)
+    bay_spacing_mm = random.choice([4000, 5000, 6000])
+    width_mm = random.choice([3000, 4000, 5000])
+    n_floors = random.choice([2, 3])
+    floor_height_mm = random.choice([3000, 3500, 4000])
+    total_height = n_floors * floor_height_mm
+    use_grid_labels = random.random() < 0.6
+
+    sections = pick_section_set()
+    col_section = sections["column"]
+    beam_section = sections["beam"]
+    stringer_section = sections["stringer"]
+
+    grid_x = [i * bay_spacing_mm for i in range(n_bays + 1)]
+    floor_elevations = [(i + 1) * floor_height_mm for i in range(n_floors)]
+
+    ground_truth = {
+        "views": ["elevation", "plan"],
+        "structure_type": "multistory_frame",
+        "grid": {
+            "x_lines_mm": grid_x,
+            "z_lines_mm": [0, width_mm],
+            "elevations_mm": [0] + floor_elevations,
+        },
+        "columns": [
+            {"grid_x_mm": x, "grid_z_mm": z, "base_mm": 0,
+             "top_mm": total_height, "section": col_section}
+            for x in grid_x for z in [0, width_mm]
+        ],
+        "beams": [
+            {"start_mm": {"x": grid_x[i], "y": elev},
+             "end_mm": {"x": grid_x[i + 1], "y": elev},
+             "section": beam_section, "role": "floor_beam"}
+            for elev in floor_elevations for i in range(n_bays)
+        ],
+        "stringers": [
+            {"start_mm": {"x": x, "z": 0},
+             "end_mm": {"x": x, "z": width_mm},
+             "section": stringer_section}
+            for x in grid_x
+        ],
+        "members_summary": [
+            {"role": "column", "section": col_section},
+            {"role": "beam", "section": beam_section},
+            {"role": "stringer", "section": stringer_section},
+        ],
+    }
+
+    def render(fig, ax):
+        tracker = GroundingTracker()
+        scale = 0.035
+        margin = 70
+        gap = 80
+        plan_height = width_mm * scale
+        elev_y_base = margin + plan_height + gap
+        total_w = n_bays * bay_spacing_mm * scale
+        h = total_height * scale
+
+        ax.text(margin, elev_y_base + h + 18, "ELEVATION",
+                fontsize=13, fontweight="bold", color="black")
+
+        # Columns
+        for x_mm in grid_x:
+            x = margin + x_mm * scale
+            draw_member_line(ax, x, elev_y_base, x, elev_y_base + h,
+                             tracker=tracker, elem_type="column",
+                             label=col_section,
+                             metadata={"grid_x_mm": x_mm})
+        label_side(ax, margin, elev_y_base + h / 2, col_section,
+                   side="left", tracker=tracker)
+
+        # Floor beams at each level
+        for f, elev in enumerate(floor_elevations):
+            y = elev_y_base + (f + 1) * floor_height_mm * scale
+            draw_member_line(ax, margin, y, margin + total_w, y,
+                             tracker=tracker, elem_type="beam",
+                             label=beam_section,
+                             metadata={"elevation_mm": elev})
+            # Elevation label (right side)
+            unit = "mm" if elev < 10000 else "m"
+            v = elev if unit == "mm" else elev / 1000
+            elev_str = f"EL +{int(v)} {unit}" if v == int(v) else f"EL +{v:.1f} {unit}"
+            ax.text(margin + total_w + 12, y, elev_str,
+                    ha="left", va="center", fontsize=9, color=LABEL_COLOR)
+
+        # Base line
+        draw_member_line(ax, margin, elev_y_base, margin + total_w,
+                         elev_y_base, tracker=tracker, elem_type="beam")
+        label_above(ax, margin, elev_y_base + h, margin + total_w,
+                    elev_y_base + h, beam_section, offset=8,
+                    tracker=tracker)
+
+        # Bay dims
+        dim_span_summary(ax, margin, margin + total_w, elev_y_base,
+                         n_bays, bay_spacing_mm, side="below", offset=25,
+                         tracker=tracker)
+
+        # Floor height dim
+        for f in range(n_floors):
+            y1 = elev_y_base + f * floor_height_mm * scale
+            y2 = elev_y_base + (f + 1) * floor_height_mm * scale
+            h_lbl = f"{floor_height_mm} mm"
+            dim_vertical(ax, y1, y2, margin, h_lbl, side="left",
+                         offset=40 + f * 12, tracker=tracker)
+
+        # ── PLAN VIEW ──
+        plan_y_base = margin
+        w = width_mm * scale
+        ax.text(margin, plan_y_base + w + 15, "PLAN",
+                fontsize=13, fontweight="bold", color="black")
+
+        draw_member_line(ax, margin, plan_y_base,
+                         margin + total_w, plan_y_base, lw=2.5,
+                         tracker=tracker, elem_type="stringer")
+        draw_member_line(ax, margin, plan_y_base + w,
+                         margin + total_w, plan_y_base + w, lw=2.5,
+                         tracker=tracker, elem_type="stringer")
+        for x_mm in grid_x:
+            x = margin + x_mm * scale
+            draw_member_line(ax, x, plan_y_base, x, plan_y_base + w,
+                             lw=1.5, tracker=tracker, elem_type="beam")
+        ax.text(margin + total_w + 10, plan_y_base + w / 2,
+                stringer_section, ha="left", va="center",
+                fontsize=10, color=LABEL_COLOR)
+        dim_vertical(ax, plan_y_base, plan_y_base + w, margin,
+                     f"{width_mm} mm", side="left", offset=30,
+                     tracker=tracker)
+
+        # Grid labels
+        if use_grid_labels:
+            grid_x_px = [margin + x * scale for x in grid_x]
+            draw_grid_labels_bottom(ax, grid_x_px, elev_y_base, offset=45)
+            grid_z_px = [plan_y_base, plan_y_base + w]
+            draw_grid_labels_left(ax, grid_z_px, margin, offset=50)
+
+        ax.set_xlim(0, margin + total_w + 120)
+        ax.set_ylim(margin - 70, elev_y_base + h + 55)
+        ground_truth["_scale"] = scale
+        ground_truth["_tracker"] = tracker
+
+    return ground_truth, render
+
+
+def generate_composite_piperack(idx: int) -> tuple[dict, callable]:
+    """Multi-tier piperack with elevation + plan."""
+    n_bays = random.randint(2, 5)
+    bay_spacing_mm = random.choice([4000, 5000, 6000, 8000])
+    width_mm = random.choice([3000, 4000, 5000])
+    n_tiers = random.choice([2, 3])
+    tier_height_mm = random.choice([3000, 4000, 5000])
+    total_height = n_tiers * tier_height_mm
+    use_grid_labels = random.random() < 0.6
+
+    sections = pick_section_set()
+    col_section = sections["column"]
+    beam_section = sections["beam"]
+    stringer_section = sections["stringer"]
+
+    grid_x = [i * bay_spacing_mm for i in range(n_bays + 1)]
+    tier_elevations = [(i + 1) * tier_height_mm for i in range(n_tiers)]
+
+    ground_truth = {
+        "views": ["elevation", "plan"],
+        "structure_type": "piperack",
+        "grid": {
+            "x_lines_mm": grid_x,
+            "z_lines_mm": [0, width_mm],
+            "elevations_mm": [0] + tier_elevations,
+        },
+        "columns": [
+            {"grid_x_mm": x, "grid_z_mm": z, "base_mm": 0,
+             "top_mm": total_height, "section": col_section}
+            for x in grid_x for z in [0, width_mm]
+        ],
+        "beams": [
+            {"start_mm": {"x": grid_x[i], "y": elev},
+             "end_mm": {"x": grid_x[i + 1], "y": elev},
+             "section": beam_section, "role": "tier_beam"}
+            for elev in tier_elevations for i in range(n_bays)
+        ],
+        "stringers": [
+            {"start_mm": {"x": x, "z": 0},
+             "end_mm": {"x": x, "z": width_mm},
+             "section": stringer_section}
+            for x in grid_x
+        ],
+        "members_summary": [
+            {"role": "column", "section": col_section},
+            {"role": "beam", "section": beam_section},
+            {"role": "stringer", "section": stringer_section},
+        ],
+    }
+
+    def render(fig, ax):
+        tracker = GroundingTracker()
+        scale = 0.03
+        margin = 70
+        gap = 80
+        plan_height = width_mm * scale
+        elev_y_base = margin + plan_height + gap
+        total_w = n_bays * bay_spacing_mm * scale
+        h = total_height * scale
+
+        ax.text(margin, elev_y_base + h + 18, "ELEVATION",
+                fontsize=13, fontweight="bold", color="black")
+
+        for x_mm in grid_x:
+            x = margin + x_mm * scale
+            draw_member_line(ax, x, elev_y_base, x, elev_y_base + h,
+                             tracker=tracker, elem_type="column",
+                             label=col_section,
+                             metadata={"grid_x_mm": x_mm})
+        label_side(ax, margin, elev_y_base + h / 2, col_section,
+                   side="left", tracker=tracker)
+
+        for t, elev in enumerate(tier_elevations):
+            y = elev_y_base + (t + 1) * tier_height_mm * scale
+            draw_member_line(ax, margin, y, margin + total_w, y,
+                             tracker=tracker, elem_type="beam",
+                             label=beam_section,
+                             metadata={"elevation_mm": elev})
+            unit = "mm" if elev < 10000 else "m"
+            v = elev if unit == "mm" else elev / 1000
+            elev_str = f"EL +{int(v)} {unit}" if v == int(v) else f"EL +{v:.1f} {unit}"
+            ax.text(margin + total_w + 12, y, elev_str,
+                    ha="left", va="center", fontsize=9, color=LABEL_COLOR)
+
+        draw_member_line(ax, margin, elev_y_base, margin + total_w,
+                         elev_y_base, tracker=tracker, elem_type="beam")
+        label_above(ax, margin, elev_y_base + h, margin + total_w,
+                    elev_y_base + h, beam_section, offset=8,
+                    tracker=tracker)
+        dim_span_summary(ax, margin, margin + total_w, elev_y_base,
+                         n_bays, bay_spacing_mm, side="below", offset=25,
+                         tracker=tracker)
+        total_h_mm = n_tiers * tier_height_mm
+        h_lbl = f"{total_h_mm} mm" if total_h_mm < 10000 else f"{total_h_mm // 1000} m"
+        dim_vertical(ax, elev_y_base, elev_y_base + h, margin, h_lbl,
+                     side="left", offset=45, tracker=tracker)
+
+        # ── PLAN VIEW ──
+        plan_y_base = margin
+        w = width_mm * scale
+        ax.text(margin, plan_y_base + w + 15, "PLAN",
+                fontsize=13, fontweight="bold", color="black")
+        draw_member_line(ax, margin, plan_y_base,
+                         margin + total_w, plan_y_base, lw=2.5,
+                         tracker=tracker, elem_type="stringer")
+        draw_member_line(ax, margin, plan_y_base + w,
+                         margin + total_w, plan_y_base + w, lw=2.5,
+                         tracker=tracker, elem_type="stringer")
+        for x_mm in grid_x:
+            x = margin + x_mm * scale
+            draw_member_line(ax, x, plan_y_base, x, plan_y_base + w,
+                             lw=1.5, tracker=tracker, elem_type="beam")
+        ax.text(margin + total_w + 10, plan_y_base + w / 2,
+                stringer_section, ha="left", va="center",
+                fontsize=10, color=LABEL_COLOR)
+        dim_vertical(ax, plan_y_base, plan_y_base + w, margin,
+                     f"{width_mm} mm", side="left", offset=30,
+                     tracker=tracker)
+
+        if use_grid_labels:
+            grid_x_px = [margin + x * scale for x in grid_x]
+            draw_grid_labels_bottom(ax, grid_x_px, elev_y_base, offset=45)
+            grid_z_px = [plan_y_base, plan_y_base + w]
+            draw_grid_labels_left(ax, grid_z_px, margin, offset=50)
+
+        ax.set_xlim(0, margin + total_w + 120)
+        ax.set_ylim(margin - 70, elev_y_base + h + 55)
+        ground_truth["_scale"] = scale
+        ground_truth["_tracker"] = tracker
+
+    return ground_truth, render
+
+
+def generate_composite_nonuniform(idx: int) -> tuple[dict, callable]:
+    """Non-uniform bay spacing frame with elevation + plan."""
+    n_bays = random.randint(2, 4)
+    # Non-uniform widths
+    bay_widths = [random.choice([3000, 4000, 5000, 6000, 8000])
+                  for _ in range(n_bays)]
+    width_mm = random.choice([3000, 4000, 5000])
+    height_mm = random.choice([4000, 5000, 6000])
+    use_grid_labels = random.random() < 0.7
+
+    sections = pick_section_set()
+    col_section = sections["column"]
+    beam_section = sections["beam"]
+    stringer_section = sections["stringer"]
+
+    # Compute cumulative grid positions
+    grid_x = [0]
+    for w in bay_widths:
+        grid_x.append(grid_x[-1] + w)
+
+    ground_truth = {
+        "views": ["elevation", "plan"],
+        "structure_type": "composite_frame",
+        "grid": {
+            "x_lines_mm": grid_x,
+            "z_lines_mm": [0, width_mm],
+            "elevations_mm": [0, height_mm],
+            "bay_widths_mm": bay_widths,
+        },
+        "columns": [
+            {"grid_x_mm": x, "grid_z_mm": z, "base_mm": 0,
+             "top_mm": height_mm, "section": col_section}
+            for x in grid_x for z in [0, width_mm]
+        ],
+        "beams": [
+            {"start_mm": {"x": grid_x[i], "y": height_mm},
+             "end_mm": {"x": grid_x[i + 1], "y": height_mm},
+             "section": beam_section, "role": "main_beam"}
+            for i in range(n_bays)
+        ],
+        "stringers": [
+            {"start_mm": {"x": x, "z": 0},
+             "end_mm": {"x": x, "z": width_mm},
+             "section": stringer_section}
+            for x in grid_x
+        ],
+        "members_summary": [
+            {"role": "column", "section": col_section},
+            {"role": "beam", "section": beam_section},
+            {"role": "stringer", "section": stringer_section},
+        ],
+    }
+
+    def render(fig, ax):
+        tracker = GroundingTracker()
+        scale = 0.04
+        margin = 70
+        gap = 80
+        plan_height = width_mm * scale
+        elev_y_base = margin + plan_height + gap
+        total_w = grid_x[-1] * scale
+        h = height_mm * scale
+
+        ax.text(margin, elev_y_base + h + 18, "ELEVATION",
+                fontsize=13, fontweight="bold", color="black")
+
+        for x_mm in grid_x:
+            x = margin + x_mm * scale
+            draw_member_line(ax, x, elev_y_base, x, elev_y_base + h,
+                             tracker=tracker, elem_type="column",
+                             label=col_section,
+                             metadata={"grid_x_mm": x_mm})
+        label_side(ax, margin, elev_y_base + h / 2, col_section,
+                   side="left", tracker=tracker)
+
+        draw_member_line(ax, margin, elev_y_base + h,
+                         margin + total_w, elev_y_base + h,
+                         tracker=tracker, elem_type="beam",
+                         label=beam_section)
+        draw_member_line(ax, margin, elev_y_base,
+                         margin + total_w, elev_y_base,
+                         tracker=tracker, elem_type="beam")
+        label_above(ax, margin, elev_y_base + h, margin + total_w,
+                    elev_y_base + h, beam_section, offset=8,
+                    tracker=tracker)
+
+        # Per-bay dimension (non-uniform, so show each)
+        for i in range(n_bays):
+            x1 = margin + grid_x[i] * scale
+            x2 = margin + grid_x[i + 1] * scale
+            lbl = f"{bay_widths[i]} mm"
+            dim_horizontal(ax, x1, x2, elev_y_base, lbl, side="below",
+                           offset=18, tracker=tracker)
+
+        h_lbl = f"{height_mm} mm" if height_mm < 10000 else f"{height_mm // 1000} m"
+        dim_vertical(ax, elev_y_base, elev_y_base + h, margin, h_lbl,
+                     side="left", offset=40, tracker=tracker)
+
+        # ── PLAN VIEW ──
+        plan_y_base = margin
+        w = width_mm * scale
+        ax.text(margin, plan_y_base + w + 15, "PLAN",
+                fontsize=13, fontweight="bold", color="black")
+        draw_member_line(ax, margin, plan_y_base,
+                         margin + total_w, plan_y_base, lw=2.5,
+                         tracker=tracker, elem_type="stringer")
+        draw_member_line(ax, margin, plan_y_base + w,
+                         margin + total_w, plan_y_base + w, lw=2.5,
+                         tracker=tracker, elem_type="stringer")
+        for x_mm in grid_x:
+            x = margin + x_mm * scale
+            draw_member_line(ax, x, plan_y_base, x, plan_y_base + w,
+                             lw=1.5, tracker=tracker, elem_type="beam")
+        ax.text(margin + total_w + 10, plan_y_base + w / 2,
+                stringer_section, ha="left", va="center",
+                fontsize=10, color=LABEL_COLOR)
+        dim_vertical(ax, plan_y_base, plan_y_base + w, margin,
+                     f"{width_mm} mm", side="left", offset=30,
+                     tracker=tracker)
+
+        if use_grid_labels:
+            grid_x_px = [margin + x * scale for x in grid_x]
+            draw_grid_labels_bottom(ax, grid_x_px, elev_y_base, offset=45)
+            grid_z_px = [plan_y_base, plan_y_base + w]
+            draw_grid_labels_left(ax, grid_z_px, margin, offset=50)
+
+        ax.set_xlim(0, margin + total_w + 120)
+        ax.set_ylim(margin - 70, elev_y_base + h + 55)
+        ground_truth["_scale"] = scale
+        ground_truth["_tracker"] = tracker
+
+    return ground_truth, render
+
+
+def generate_composite_mixed_bracing(idx: int) -> tuple[dict, callable]:
+    """Frame with different bracing types per bay + elevation + plan."""
+    n_bays = random.randint(3, 5)
+    bay_spacing_mm = random.choice([4000, 5000, 6000])
+    width_mm = random.choice([3000, 4000, 5000])
+    height_mm = random.choice([4000, 5000, 6000])
+    use_grid_labels = random.random() < 0.6
+
+    # Different brace type per bay (some may be "none")
+    brace_options = ["X", "V", "single", "none"]
+    bay_braces = [random.choice(brace_options) for _ in range(n_bays)]
+    # Ensure at least one bay has bracing
+    if all(b == "none" for b in bay_braces):
+        bay_braces[0] = random.choice(["X", "V", "single"])
+
+    sections = pick_section_set()
+    col_section = sections["column"]
+    beam_section = sections["beam"]
+    stringer_section = sections["stringer"]
+    brace_section = sections["bracing"]
+
+    grid_x = [i * bay_spacing_mm for i in range(n_bays + 1)]
+
+    bracing_list = [
+        {"bay_x_mm": [grid_x[i], grid_x[i + 1]],
+         "elevation_mm": [0, height_mm],
+         "type": bay_braces[i], "section": brace_section}
+        for i in range(n_bays) if bay_braces[i] != "none"
+    ]
+
+    ground_truth = {
+        "views": ["elevation", "plan"],
+        "structure_type": "braced_frame",
+        "grid": {
+            "x_lines_mm": grid_x,
+            "z_lines_mm": [0, width_mm],
+            "elevations_mm": [0, height_mm],
+        },
+        "columns": [
+            {"grid_x_mm": x, "grid_z_mm": z, "base_mm": 0,
+             "top_mm": height_mm, "section": col_section}
+            for x in grid_x for z in [0, width_mm]
+        ],
+        "beams": [
+            {"start_mm": {"x": grid_x[i], "y": height_mm},
+             "end_mm": {"x": grid_x[i + 1], "y": height_mm},
+             "section": beam_section, "role": "main_beam"}
+            for i in range(n_bays)
+        ],
+        "stringers": [
+            {"start_mm": {"x": x, "z": 0},
+             "end_mm": {"x": x, "z": width_mm},
+             "section": stringer_section}
+            for x in grid_x
+        ],
+        "bracing": bracing_list,
+        "members_summary": [
+            {"role": "column", "section": col_section},
+            {"role": "beam", "section": beam_section},
+            {"role": "stringer", "section": stringer_section},
+            {"role": "bracing", "section": brace_section},
+        ],
+    }
+
+    def render(fig, ax):
+        tracker = GroundingTracker()
+        scale = 0.04
+        margin = 70
+        gap = 80
+        plan_height = width_mm * scale
+        elev_y_base = margin + plan_height + gap
+        total_w = n_bays * bay_spacing_mm * scale
+        h = height_mm * scale
+
+        ax.text(margin, elev_y_base + h + 18, "ELEVATION",
+                fontsize=13, fontweight="bold", color="black")
+
+        for x_mm in grid_x:
+            x = margin + x_mm * scale
+            draw_member_line(ax, x, elev_y_base, x, elev_y_base + h,
+                             tracker=tracker, elem_type="column",
+                             label=col_section,
+                             metadata={"grid_x_mm": x_mm})
+        label_side(ax, margin, elev_y_base + h / 2, col_section,
+                   side="left", tracker=tracker)
+
+        draw_member_line(ax, margin, elev_y_base + h,
+                         margin + total_w, elev_y_base + h,
+                         tracker=tracker, elem_type="beam",
+                         label=beam_section)
+        draw_member_line(ax, margin, elev_y_base,
+                         margin + total_w, elev_y_base,
+                         tracker=tracker, elem_type="beam")
+        label_above(ax, margin, elev_y_base + h, margin + total_w,
+                    elev_y_base + h, beam_section, offset=8,
+                    tracker=tracker)
+
+        # Per-bay bracing
+        brace_funcs = {"X": draw_brace_x, "V": draw_brace_v,
+                       "single": draw_brace_single}
+        for i in range(n_bays):
+            if bay_braces[i] != "none":
+                x1 = margin + grid_x[i] * scale
+                x2 = margin + grid_x[i + 1] * scale
+                brace_funcs[bay_braces[i]](
+                    ax, x1, elev_y_base, x2, elev_y_base + h,
+                    tracker=tracker, label=brace_section,
+                    metadata={"section": brace_section,
+                              "type": bay_braces[i]})
+
+        # Brace label
+        braced_bay = next(i for i, b in enumerate(bay_braces) if b != "none")
+        mid_x = margin + (grid_x[braced_bay] + grid_x[braced_bay + 1]) / 2 * scale
+        ax.text(mid_x, elev_y_base + h / 2, brace_section,
+                ha="center", va="center", fontsize=9, color=LABEL_COLOR,
+                bbox=dict(boxstyle="round,pad=0.2", facecolor="white",
+                          edgecolor="none", alpha=0.8))
+
+        dim_span_summary(ax, margin, margin + total_w, elev_y_base,
+                         n_bays, bay_spacing_mm, side="below", offset=25,
+                         tracker=tracker)
+        h_lbl = f"{height_mm} mm" if height_mm < 10000 else f"{height_mm // 1000} m"
+        dim_vertical(ax, elev_y_base, elev_y_base + h, margin, h_lbl,
+                     side="left", offset=45, tracker=tracker)
+
+        # ── PLAN VIEW ──
+        plan_y_base = margin
+        w = width_mm * scale
+        ax.text(margin, plan_y_base + w + 15, "PLAN",
+                fontsize=13, fontweight="bold", color="black")
+        draw_member_line(ax, margin, plan_y_base,
+                         margin + total_w, plan_y_base, lw=2.5,
+                         tracker=tracker, elem_type="stringer")
+        draw_member_line(ax, margin, plan_y_base + w,
+                         margin + total_w, plan_y_base + w, lw=2.5,
+                         tracker=tracker, elem_type="stringer")
+        for x_mm in grid_x:
+            x = margin + x_mm * scale
+            draw_member_line(ax, x, plan_y_base, x, plan_y_base + w,
+                             lw=1.5, tracker=tracker, elem_type="beam")
+        ax.text(margin + total_w + 10, plan_y_base + w / 2,
+                stringer_section, ha="left", va="center",
+                fontsize=10, color=LABEL_COLOR)
+        dim_vertical(ax, plan_y_base, plan_y_base + w, margin,
+                     f"{width_mm} mm", side="left", offset=30,
+                     tracker=tracker)
+
+        if use_grid_labels:
+            grid_x_px = [margin + x * scale for x in grid_x]
+            draw_grid_labels_bottom(ax, grid_x_px, elev_y_base, offset=45)
+            grid_z_px = [plan_y_base, plan_y_base + w]
+            draw_grid_labels_left(ax, grid_z_px, margin, offset=50)
+
+        ax.set_xlim(0, margin + total_w + 120)
+        ax.set_ylim(margin - 70, elev_y_base + h + 55)
+        ground_truth["_scale"] = scale
+        ground_truth["_tracker"] = tracker
+
+    return ground_truth, render
+
+
+LEVEL3_GENERATORS = [
+    generate_composite_frame,
+    generate_composite_multistory,
+    generate_composite_piperack,
+    generate_composite_nonuniform,
+    generate_composite_mixed_bracing,
+]
+
+
 def generate_level3(idx: int) -> tuple[dict, callable]:
-    return generate_composite_frame(idx)
+    gen = random.choice(LEVEL3_GENERATORS)
+    return gen(idx)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -724,7 +1308,7 @@ def generate_level3(idx: int) -> tuple[dict, callable]:
 # ═══════════════════════════════════════════════════════════════════
 
 GENERATORS = {1: generate_level1, 2: generate_level2, 3: generate_level3}
-DEFAULT_COUNTS = {1: 1000, 2: 1500, 3: 1000}
+DEFAULT_COUNTS = {3: 3500}
 
 
 def generate_dataset(level: int, count: int, output_dir: Path):
@@ -785,13 +1369,13 @@ def main():
     output_dir = Path(args.output)
 
     if args.level == "all":
-        levels = [1, 2, 3]
+        levels = list(DEFAULT_COUNTS.keys())  # Only Level 3 by default
     else:
         levels = [int(args.level)]
 
     total = 0
     for level in levels:
-        count = args.count or DEFAULT_COUNTS[level]
+        count = args.count or DEFAULT_COUNTS.get(level, 500)
         level_dir = output_dir / f"level{level}"
         print(f"\n{'=' * 60}")
         print(f"Generating Level {level}: {count} images")

@@ -302,6 +302,38 @@ def dim_span_summary(ax, x_start, x_end, y, n_bays: int, spacing: float,
                        {"n_bays": n_bays, "spacing_mm": spacing})
 
 
+# ── Grid Label Primitives ──
+
+GRID_COL_LABELS = list("ABCDEFGHJKLMNPQRSTUVWXYZ")  # skip I, O
+GRID_ROW_LABELS = [str(i) for i in range(1, 20)]
+
+
+def draw_grid_labels_bottom(ax, grid_x_px: list[float], y_base: float,
+                            offset: float = 35):
+    """Draw column grid labels (A, B, C...) in circles below the frame."""
+    y = y_base - offset
+    for i, x in enumerate(grid_x_px):
+        label = GRID_COL_LABELS[i % len(GRID_COL_LABELS)]
+        circle = plt.Circle((x, y), 10, fill=False, edgecolor="black",
+                            linewidth=1.2)
+        ax.add_patch(circle)
+        ax.text(x, y, label, ha="center", va="center", fontsize=9,
+                fontweight="bold", color="black", fontfamily=FONT_FAMILY)
+
+
+def draw_grid_labels_left(ax, grid_y_px: list[float], x_base: float,
+                          offset: float = 35):
+    """Draw row grid labels (1, 2, 3...) in circles to the left of the frame."""
+    x = x_base - offset
+    for i, y in enumerate(grid_y_px):
+        label = GRID_ROW_LABELS[i % len(GRID_ROW_LABELS)]
+        circle = plt.Circle((x, y), 10, fill=False, edgecolor="black",
+                            linewidth=1.2)
+        ax.add_patch(circle)
+        ax.text(x, y, label, ha="center", va="center", fontsize=9,
+                fontweight="bold", color="black", fontfamily=FONT_FAMILY)
+
+
 # ── Figure Setup ──
 
 def create_figure(width_in: float = 12, height_in: float = 8,

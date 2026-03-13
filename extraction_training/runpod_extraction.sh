@@ -41,19 +41,20 @@ echo "[1/5] Installing dependencies..."
 echo "========================================"
 pip install -q unsloth
 pip install -q --no-deps trl peft accelerate bitsandbytes
-pip install -q matplotlib Pillow datasets
+pip install -q matplotlib Pillow datasets qwen-vl-utils
 echo "✅ Dependencies installed"
 
-# ── Step 2: Generate full training dataset ──
-# (SKIP — already generated)
-# echo ""
-# echo "[2/5] Generating synthetic training images..."
-# echo "========================================"
-# python -m extraction_training.synthetic_drawings \
-#     --level all \
-#     --output data/extraction
+# ── Step 2: Generate 3D multi-view training dataset ──
 echo ""
-echo "[2/5] Skipping image generation (already done)"
+echo "[2/5] Generating 3,500 Level 3 (3D multi-view) images..."
+echo "========================================"
+
+python -m extraction_training.synthetic_drawings \
+    --level 3 \
+    --count 3500 \
+    --output data/extraction
+
+echo "✅ 3,500 multi-view images generated"
 
 # ── Step 3: Format for Qwen3-VL ──
 echo ""
@@ -84,7 +85,7 @@ echo "✅ Dry run passed"
 echo ""
 echo "[5/5] Starting QLoRA fine-tuning..."
 echo "========================================"
-echo "  This will take approximately 3-4 hours on H100"
+echo "  1 epoch, eval every 50 steps, save every 100 steps"
 echo ""
 
 python extraction_training/train_extraction.py \
@@ -92,7 +93,7 @@ python extraction_training/train_extraction.py \
     --eval-data data/extraction_vl_train_eval.jsonl \
     --output-dir $WORKSPACE/models/extraction_vl_lora \
     --base-model unsloth/Qwen3-VL-8B-Instruct \
-    --epochs 3 \
+    --epochs 1 \
     --batch-size 1 \
     --grad-accum 4 \
     --lr 2e-5 \
