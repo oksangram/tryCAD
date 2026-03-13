@@ -1,0 +1,20 @@
+{
+  "script": "STAAD SPACE\nINPUT WIDTH 79\nUNIT METER KN\n\nPERFORM ANALYSIS\n\nFINISH\n",
+  "validation": {
+    "is_valid": true,
+    "errors": [],
+    "warnings": [
+      "No supports defined — structure will be unstable"
+    ]
+  },
+  "session": {
+    "n_joints": 0,
+    "n_members": 0,
+    "n_sections": 0,
+    "n_loads": 0,
+    "n_supports": 0,
+    "n_tool_calls": 0
+  },
+  "rounds": 1,
+  "elapsed": 5.24
+}

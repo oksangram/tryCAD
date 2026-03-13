@@ -166,15 +166,58 @@ class StructuralAgent:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
         payload = {
-            "model": "structural-dsl",
+            "model": "unsloth/Qwen2.5-72B-Instruct-bnb-4bit",
             "messages": messages,
             "tools": TOOLS_SCHEMA,
-            "max_tokens": self.max_tokens,
+            "max_tokens": 2048,
             "temperature": 0.1,
+            "stream": True,
         }
 
-        response = requests.post(url, json=payload, headers=headers, timeout=120)
+        print("\n[AI Thinking...]\n", end="", flush=True)
+        response = requests.post(url, json=payload, headers=headers, timeout=300, stream=True)
         response.raise_for_status()
-        data = response.json()
 
-        return data["choices"][0]["message"]
+        full_content = ""
+        tool_calls = []
+
+        import json
+        for line in response.iter_lines():
+            if line:
+                line = line.decode("utf-8")
+                if line.startswith("data: ") and line != "data: [DONE]":
+                    data = json.loads(line[6:])
+                    delta = data["choices"][0].get("delta", {})
+
+                    if "content" in delta and delta["content"]:
+                        content = delta["content"]
+                        full_content += content
+                        print(content, end="", flush=True)
+
+                    if "tool_calls" in delta and delta["tool_calls"]:
+                        for tc_delta in delta["tool_calls"]:
+                            index = tc_delta.get("index", 0)
+                            while len(tool_calls) <= index:
+                                tool_calls.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
+                            
+                            if "id" in tc_delta and tc_delta["id"]:
+                                tool_calls[index]["id"] = tc_delta["id"]
+                            if "function" in tc_delta:
+                                fn_delta = tc_delta["function"]
+                                if "name" in fn_delta and fn_delta["name"]:
+                                    tool_calls[index]["function"]["name"] = fn_delta["name"]
+                                if "arguments" in fn_delta and fn_delta["arguments"]:
+                                    tool_calls[index]["function"]["arguments"] += fn_delta["arguments"]
+
+        print()
+
+        msg = {"role": "assistant"}
+        if full_content:
+            msg["content"] = full_content
+        else:
+            msg["content"] = ""
+            
+        if tool_calls:
+            msg["tool_calls"] = tool_calls
+            
+        return msg

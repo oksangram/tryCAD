@@ -53,7 +53,7 @@ class ToolExecutor:
 
             try:
                 args = json.loads(args_str) if isinstance(args_str, str) else args_str
-                result = execute_tool(tool_name, self.session, **args)
+                result = execute_tool(self.session, tool_name, args)
 
                 self.call_history.append({
                     "id": call_id,
@@ -110,7 +110,7 @@ class ToolExecutor:
             "n_joints": len(self.session._joints),
             "n_members": len(self.session._members),
             "n_sections": len(self.session._sections),
-            "n_loads": len(self.session._loads),
+            "n_loads": len(self.session._load_cases),
             "n_supports": len(self.session._supports),
             "n_tool_calls": len(self.call_history),
         }
