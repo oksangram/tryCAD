@@ -18,6 +18,7 @@ from tools.registry import TOOLS_SCHEMA
 
 def prepare_ift_data(
     ift_input: str = "data/ift_train.jsonl",
+    bridge_input: str = "data/ift_extraction_bridge.jsonl",
     output_train: str = "data/ift_train_prepared.jsonl",
     output_eval: str = "data/ift_eval_prepared.jsonl",
     eval_fraction: float = 0.05,
@@ -39,11 +40,25 @@ def prepare_ift_data(
 
     # Read all examples
     examples = []
-    with open(ift_input, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                examples.append(json.loads(line))
+    
+    # Read primary IFT examples
+    if os.path.exists(ift_input):
+        with open(ift_input, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    examples.append(json.loads(line))
+                    
+    # Read bridge IFT examples
+    if bridge_input and os.path.exists(bridge_input):
+        bridge_count = 0
+        with open(bridge_input, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    examples.append(json.loads(line))
+                    bridge_count += 1
+        print(f"Loaded {bridge_count} extraction bridge examples from {bridge_input}")
 
     # Augment system messages with tool schema (strict no-indent for jsonl format)
     tool_schema_str = json.dumps(TOOLS_SCHEMA)
