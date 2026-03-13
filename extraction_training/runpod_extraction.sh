@@ -45,20 +45,15 @@ pip install -q matplotlib Pillow datasets
 echo "✅ Dependencies installed"
 
 # ── Step 2: Generate full training dataset ──
+# (SKIP — already generated)
+# echo ""
+# echo "[2/5] Generating synthetic training images..."
+# echo "========================================"
+# python -m extraction_training.synthetic_drawings \
+#     --level all \
+#     --output data/extraction
 echo ""
-echo "[2/5] Generating synthetic training images..."
-echo "========================================"
-echo "  Level 1: 1,000 single member drawings"
-echo "  Level 2: 1,500 simple frame drawings"
-echo "  Level 3: 1,000 composite frame drawings"
-echo ""
-
-python -m extraction_training.synthetic_drawings \
-    --level all \
-    --output data/extraction
-
-echo ""
-echo "✅ 3,500 images generated"
+echo "[2/5] Skipping image generation (already done)"
 
 # ── Step 3: Format for Qwen3-VL ──
 echo ""
@@ -96,7 +91,7 @@ python extraction_training/train_extraction.py \
     --train-data data/extraction_vl_train.jsonl \
     --eval-data data/extraction_vl_train_eval.jsonl \
     --output-dir $WORKSPACE/models/extraction_vl_lora \
-    --base-model unsloth/Qwen3-VL-8B \
+    --base-model unsloth/Qwen3-VL-8B-Instruct \
     --epochs 3 \
     --batch-size 1 \
     --grad-accum 4 \

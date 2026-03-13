@@ -31,7 +31,7 @@ def main():
     parser.add_argument("--output-dir", type=str, default="models/extraction_vl_lora",
                         help="Output directory for LoRA adapter")
     parser.add_argument("--base-model", type=str,
-                        default="unsloth/Qwen3-VL-8B",
+                        default="unsloth/Qwen3-VL-8B-Instruct",
                         help="Base model ID")
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=1)
