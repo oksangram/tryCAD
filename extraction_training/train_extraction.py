@@ -98,8 +98,6 @@ def main():
     # ── Step 3: Load and format dataset ──
     print(f"\n[3/5] Loading training data from {args.train_data}...")
 
-    from datasets import Dataset
-
     def load_jsonl(path):
         examples = []
         with open(path, "r") as f:
@@ -112,13 +110,25 @@ def main():
     train_raw = load_jsonl(args.train_data)
     print(f"  Loaded {len(train_raw)} training examples")
 
-    # Convert to HF Dataset
-    train_dataset = Dataset.from_list(train_raw)
+    # Use plain PyTorch Dataset — avoids pyarrow mixed-type errors
+    # (user content is a list, system/assistant content is a string)
+    from torch.utils.data import Dataset as TorchDataset
+
+    class ChatDataset(TorchDataset):
+        """Simple wrapper — avoids pyarrow schema issues with mixed-type content."""
+        def __init__(self, data):
+            self.data = data
+        def __len__(self):
+            return len(self.data)
+        def __getitem__(self, idx):
+            return self.data[idx]
+
+    train_dataset = ChatDataset(train_raw)
 
     eval_dataset = None
     if args.eval_data and os.path.exists(args.eval_data):
         eval_raw = load_jsonl(args.eval_data)
-        eval_dataset = Dataset.from_list(eval_raw)
+        eval_dataset = ChatDataset(eval_raw)
         print(f"  Loaded {len(eval_raw)} eval examples")
 
     if args.dry_run:
