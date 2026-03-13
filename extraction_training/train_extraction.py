@@ -88,6 +88,8 @@ def main():
         random_state=42,
         use_rslora=False,
         loftq_config=None,
+        target_modules="all-linear",
+        modules_to_save=["lm_head", "embed_tokens"],
     )
 
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -150,9 +152,14 @@ def main():
     print(f"\n[4/5] Configuring SFT trainer...")
 
     from trl import SFTTrainer, SFTConfig
-    from unsloth import is_bfloat16_supported
+    from unsloth import is_bfloat16_supported, UnslothVisionDataCollator
 
     FastVisionModel.for_training(model)
+
+    # Compute warmup steps to avoid deprecated warmup_ratio
+    total_steps = (len(train_dataset) * args.epochs) // (
+        args.batch_size * args.grad_accum)
+    warmup_steps = max(1, int(total_steps * 0.1))
 
     sft_config = SFTConfig(
         output_dir=args.output_dir,
@@ -161,7 +168,7 @@ def main():
         num_train_epochs=args.epochs,
         learning_rate=args.lr,
         lr_scheduler_type="cosine",
-        warmup_ratio=0.1,
+        warmup_steps=warmup_steps,
         fp16=not is_bfloat16_supported(),
         bf16=is_bfloat16_supported(),
         logging_steps=10,
@@ -172,7 +179,6 @@ def main():
         seed=42,
         max_seq_length=args.max_seq_length,
         report_to="none",
-        # VL specific
         remove_unused_columns=False,
         dataset_text_field="",
         dataset_kwargs={"skip_prepare_dataset": True},
@@ -184,7 +190,7 @@ def main():
         args=sft_config,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
-        data_collator=FastVisionModel.get_data_collator(tokenizer),
+        data_collator=UnslothVisionDataCollator(model, tokenizer),
     )
 
     print(f"  Total training steps: "
