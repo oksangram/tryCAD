@@ -13,6 +13,7 @@ export HF_HOME=/workspace/huggingface_cache
 export TRANSFORMERS_CACHE=/workspace/huggingface_cache
 
 echo "Installing dependencies (cached — should be fast)..."
+pip install -q -r requirements.txt
 pip install -q unsloth
 pip install -q --no-deps trl peft accelerate bitsandbytes
 pip install -q matplotlib Pillow datasets qwen-vl-utils
