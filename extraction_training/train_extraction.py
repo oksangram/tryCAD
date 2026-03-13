@@ -33,7 +33,7 @@ def main():
     parser.add_argument("--base-model", type=str,
                         default="unsloth/Qwen3-VL-8B-Instruct",
                         help="Base model ID")
-    parser.add_argument("--epochs", type=int, default=3)
+    parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--grad-accum", type=int, default=4)
     parser.add_argument("--lr", type=float, default=2e-5)
@@ -172,8 +172,13 @@ def main():
         fp16=not is_bfloat16_supported(),
         bf16=is_bfloat16_supported(),
         logging_steps=10,
-        save_strategy="epoch",
-        eval_strategy="epoch" if eval_dataset else "no",
+        save_strategy="steps",
+        save_steps=100,
+        save_total_limit=3,
+        eval_strategy="steps" if eval_dataset else "no",
+        eval_steps=50 if eval_dataset else None,
+        load_best_model_at_end=True if eval_dataset else False,
+        metric_for_best_model="eval_loss",
         optim="adamw_8bit",
         weight_decay=0.01,
         seed=42,
