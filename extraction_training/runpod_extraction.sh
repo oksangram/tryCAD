@@ -31,7 +31,7 @@ export HF_HOME=/workspace/huggingface_cache
 export TRANSFORMERS_CACHE=/workspace/huggingface_cache
 
 WORKSPACE=/workspace
-PROJECT_DIR=$WORKSPACE/tryCAD_AI
+PROJECT_DIR=$WORKSPACE/tryCAD
 
 cd $PROJECT_DIR
 
