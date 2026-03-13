@@ -33,6 +33,8 @@ def main():
                         help="Path to LoRA adapter (omit for base model)")
     parser.add_argument("--n", type=int, default=5,
                         help="Number of examples to evaluate")
+    parser.add_argument("--skip", type=int, default=0,
+                        help="Skip first N examples (to test unseen data)")
     parser.add_argument("--max-tokens", type=int, default=2048,
                         help="Max tokens to generate")
     args = parser.parse_args()
@@ -45,8 +47,8 @@ def main():
             if line:
                 examples.append(json.loads(line))
 
-    examples = examples[:args.n]
-    print(f"Evaluating on {len(examples)} examples")
+    examples = examples[args.skip:args.skip + args.n]
+    print(f"Evaluating on {len(examples)} examples (skipped first {args.skip})")
     print(f"Base model: {args.base_model}")
     print(f"LoRA: {args.lora_path or 'NONE (base model)'}")
     print("=" * 70)
