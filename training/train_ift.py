@@ -18,8 +18,8 @@ from pathlib import Path
 
 def main():
     parser = argparse.ArgumentParser(description="IFT training with Unsloth QLoRA")
-    parser.add_argument("--base-model", default="models/cpt_checkpoint",
-                        help="CPT checkpoint path (or base model for fresh IFT)")
+    parser.add_argument("--base-model", default="unsloth/Qwen2.5-72B-Instruct-bnb-4bit",
+                        help="Base model ID or local checkpoint path")
     parser.add_argument("--train-data", default="data/ift_train_prepared.jsonl",
                         help="Training data JSONL")
     parser.add_argument("--eval-data", default="data/ift_eval_prepared.jsonl",
@@ -71,14 +71,23 @@ def main():
         print("\n[DRY RUN] Config validated. Exiting.")
         return config
 
+    # ── Set cache dirs to persistent volume ──
+    os.environ["HF_HOME"] = "/workspace/huggingface_cache"
+    os.environ["TRANSFORMERS_CACHE"] = "/workspace/huggingface_cache"
+    os.environ["HF_HUB_CACHE"] = "/workspace/huggingface_cache"
+    os.makedirs("/workspace/huggingface_cache", exist_ok=True)
+
     # ── Load model ──
     from unsloth import FastLanguageModel
 
     # Check if base is a Unsloth-quantized model or a local checkpoint
     is_local = os.path.isdir(args.base_model)
 
+    print(f"\nDownloading/loading model: {args.base_model}")
+    print(f"HF cache: {os.environ['HF_HOME']}")
+
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=args.base_model if is_local else "unsloth/Qwen2.5-72B-Instruct-bnb-4bit",
+        model_name=args.base_model,
         max_seq_length=args.max_seq_len,
         dtype=None,
         load_in_4bit=True,
